@@ -8,96 +8,20 @@ from sklearn.metrics import euclidean_distances
 from sklearn.gaussian_process.kernels import RBF
 import math
 
+
 def get_distance(x1, x2):
     sum = 0
     for i in range(len(x1)):
         sum += (x1[i] - x2[i]) ** 2
     return math.sqrt(sum)
 
+def decrease_function(learning_rate, current_iteration, iterations):
+    return learning_rate * math.exp((-1*(float(current_iteration)/iterations)))
+
+
 
 class RadialBasisFunctionNetwork(ClassifierMixin, BaseEstimator):
-    
-    def get_rbf(self, x, c, s):
-        return np.exp(-1 / (2 * s**2) * get_distance(x,c))
 
-    def get_rbf_as_list(self, X, centroids, std_list):
-        RBF_list = []
-        for x in X:
-            RBF_list.append([self.get_rbf(x, c, s) for (c, s) in zip(centroids, std_list)])
-        return np.array(RBF_list)
-
-    
-    def __get_rbf(self, x, c, s, rbf_kernel):
-        rbf_kernel.set_params(length_scale= s)
-        return rbf_kernel(np.array([c]), x)
-    
-    def __get_rbf_as_list(self, X, centroids, std_list):
-        rbf_kernel = RBF()
-        rbf_list = []
-        for c, l in zip(centroids, std_list):
-            rbf_list.append(self.__get_rbf(X, c, l, rbf_kernel)[0])
-        rbf_list = np.array(rbf_list)
-        rbf_list = rbf_list.T
-        return rbf_list
-    
-    """
-    
-    def __get_rbf(self, x, c, s, rbf_kernel):
-        rbf_kernel.set_params(length_scale= s)
-        return rbf_kernel(np.array([c]), np.array([x]))
-    
-    def __get_rbf_as_list(self, X, centroids, std_list):
-        rbf_kernel = RBF()
-        rbf_list = []
-        for i, x in enumerate(X):
-            kernel_result = []
-            for j, (c, l) in enumerate(zip(centroids, std_list)):
-                kernel_result.append(self.__get_rbf(x, c, l, rbf_kernel)[0][0])
-            rbf_list.append(kernel_result)
-        rbf_list = np.array(rbf_list)
-        return rbf_list
-    """
-    
-    def __convert_to_one_hot(self, x, num_of_classes): # Label werden von Zahl 0-9 zu matrix (one hot)
-        arr = np.zeros((len(x), num_of_classes))
-        for i in range(len(x)):
-            c = int(x[i])
-            arr[i][c] = 1
-        return arr
-    
-    def get_identity(self, x):
-        return x
-    
-    def get_identity_derivate(self,x):
-        return np.ones(x.size)
-    
-    def get_sigmoid(self, x):
-        return 1/(1+np.exp(-x))
-
-    def get_sigmoid_derivate(self, x):
-        return self.get_identity(x)*(1-self.get_identity(x))
-    
-    def get_softmax_function(self, x):
-        return np.exp(x)/(np.sum(np.exp(x)))
-    
-    def get_softmax_derivate_function(self, x):
-        return self.get_softmax_function(x)*(1- self.get_softmax_function(x))
-    
-    def get_activation_function(self, x):
-        #return self.get_identity(x)
-        #return self.get_sigmoid(x)
-        return self.get_softmax_function(x)
-    
-    def get_activation_derivate_function(self, x):
-        #return self.get_identity_derivate(x)
-        #return self.get_sigmoid_derivate(x)
-        return self.get_softmax_derivate_function(x)
-        
-    # TODO: netInput!
-    def get_delta(self, netInput, activationValueShould, activationValueIs):
-        t =  (activationValueShould - activationValueIs)
-        return t
-    
     """ An example classifier which implements a 1-NN algorithm.
 
     For more information regarding how to build your own classifier, read more
@@ -117,11 +41,20 @@ class RadialBasisFunctionNetwork(ClassifierMixin, BaseEstimator):
     classes_ : ndarray, shape (n_classes,)
         The classes seen at :meth:`fit`.
     """
-    def __init__(self, std_from_cluster=True, pseudoinverse=False, k=10, learning_rate = 1.0):
+    def __init__(self, std_from_cluster=True, pseudoinverse=False, k=10, 
+                 learning_rate = 1.0, decay_factor=0.0001, activation_function="softmax",
+                 supervised_centroid_calculation=False, shuffle_data=False, std_from_clusters=False,
+                 batch_size=1):
         self.std_from_cluster = std_from_cluster
         self.pseudoinverse = pseudoinverse
         self.k = k # number of kernels
         self.learning_rate = learning_rate
+        self.decay_factor = decay_factor
+        self.activation_function = activation_function
+        self.supervised_centroid_calculation = supervised_centroid_calculation
+        self.shuffle_data = shuffle_data
+        self.std_from_clusters = std_from_clusters
+        self.batch_size = batch_size
 
     def fit(self, X, y, tX, ty):
         self.tX = tX
@@ -140,58 +73,28 @@ class RadialBasisFunctionNetwork(ClassifierMixin, BaseEstimator):
         self : object
             Returns self.
         """
-    
-        
         # Check that X and y have correct shape
         X, y = check_X_y(X, y)
         # Store the classes seen during fit
         self.classes_ = unique_labels(y)
         
         # Sort X and y based on y    inertia = Variance?
-        #self.centroids_, self.inertias_ = self.__calculate_kmean_for_each_label(X, y) # sqrt(intertia) = standart_deviation
-        self.centroids_, self.inertias_ = self.__calculate_kmean_for_number_of_labels(X, self.k)
-        
+        self.__calculate_centroids(X, y)
         
         # Shuffle data
-        X, y = shuffle(X, y)
+        if self.shuffle_data:
+            X, y = shuffle(X, y)
         
         #calculate std_deviation
-        self.std_from_clusters_ = True
-        if not self.std_from_clusters_:
+        if not self.std_from_clusters: # Kann eigentlich weg
             dMax = np.max([get_distance(c1, c2) for c1 in self.centroids_ for c2 in self.centroids_])
-            self.std_list = np.repeat(dMax / np.sqrt(2 * self.k), self.k)
+            self.std_list = np.repeat(dMax / np.sqrt(2 * self.k), self.k * len(self.classes_)**int(self.supervised_centroid_calculation))
         else:
             self.std_list = np.sqrt(self.inertias_)
             
-        #rbf_x = self.get_rbf_as_list(X, self.centroids_, self.std_list)
         rbf_x = self.__get_rbf_as_list(X, self.centroids_, self.std_list)
         
-        self.__train_weight(rbf_x, y)
-    
-    
-        #Test new network
-        test_network = False
-        if(test_network):
-            RBF_list_tst = self.__get_rbf_as_list(self.tX, self.centroids_, self.std_list)
-            
-            #self.w = np.identity(10)
-                
-            #self.pred_ty = RBF_list_tst @ self.w
-            self.pred_ty =   RBF_list_tst @ self.w
-            
-            self.pred_ty2 = np.array([np.argmax(x) for x in self.pred_ty])
-            
-            print("All same? "+ str(np.mean(self.pred_ty2)== self.pred_ty2[0]))
-            
-            #self.ty = self.convert_one_hot_to_number(self.ty)
-            
-            diff = self.pred_ty2 - self.ty
-    
-            print('Accuracy: ', len(np.where(diff == 0)[0]) / len(diff))
-            
-            print("weight:")
-            print(self.w)
-            
+        self.__train_weight(rbf_x, y)       
             
         self.X_ = X
         self.y_ = y
@@ -236,9 +139,9 @@ class RadialBasisFunctionNetwork(ClassifierMixin, BaseEstimator):
         #return self.y_[closest]
     
     def __calculate_kmean_for_each_label(self, X, y):
-        kmeans = KMeans(n_clusters=1)
-        centroids = np.zeros((len(self.classes_), X.shape[1]))
-        inertias = np.zeros(len(self.classes_))
+        kmeans = KMeans(n_clusters=self.k)
+        centroids = np.zeros(((len(self.classes_)*self.k), X.shape[1]))
+        inertias = np.zeros(len(self.classes_)*self.k)
         sortOrder = y.argsort()
         X_sorted = X[sortOrder]
         y_sorted = y[sortOrder]
@@ -246,9 +149,8 @@ class RadialBasisFunctionNetwork(ClassifierMixin, BaseEstimator):
             all_occurences = np.where(y_sorted==self.classes_[i])
             x_of_same_label = X_sorted[all_occurences[0][0]:all_occurences[0][-1]]
             kmeans.fit(x_of_same_label)
-            centroids[i] = kmeans.cluster_centers_
-            inertias[i] = kmeans.inertia_/len(x_of_same_label)
-            
+            centroids[i*self.k : i*self.k+self.k] = kmeans.cluster_centers_
+            inertias[i*self.k : i*self.k+self.k] = [kmeans.inertia_/len(x_of_same_label)]*self.k
         return centroids, inertias
     
     def __calculate_kmean_for_number_of_labels(self, X, number_of_centroids):
@@ -263,53 +165,95 @@ class RadialBasisFunctionNetwork(ClassifierMixin, BaseEstimator):
         else:
             self.__train_with_backpropagation(rbf_x, y)
             
-    def __calculate_pseudoinverse(self, rbf_x, y):
-            
-        self.w = np.linalg.pinv(rbf_x.T @ rbf_x) @ rbf_x.T @ self.y #self.convert_to_one_hot(self.y, self.number_of_classes)
+    def __calculate_pseudoinverse(self, rbf_x, y):            
+        self.w = np.linalg.pinv(rbf_x.T @ rbf_x) @ rbf_x.T @ self.__convert_to_one_hot(y, len(self.classes_))
 
-        RBF_list_tst = self.get_rbf_as_list(self.tX, self.centroids, self.std_list)
-
-        #self.w = np.identity(10)
-        
-        self.pred_ty = RBF_list_tst @ self.w
-
-        self.pred_ty2 = np.array([np.argmax(x) for x in self.pred_ty])
-        
-        #self.ty = self.convert_one_hot_to_number(self.ty)
-
-        diff = self.pred_ty2 - self.ty
-
-        print('Accuracy: ', len(np.where(diff == 0)[0]) / len(diff))
-        
     def __train_with_backpropagation(self, rbf_x, y):
                  
         one_hot = self.__convert_to_one_hot(y, len(self.classes_))
         
-        self.w = np.random.uniform(0,1,(self.k,len(self.classes_)))
+        self.w = np.random.uniform(0,1,(self.k*len(self.classes_)**int(self.supervised_centroid_calculation),len(self.classes_)))
         
-        self.b = 1;
+        avg_weight_update = np.zeros((self.k*len(self.classes_)**int(self.supervised_centroid_calculation),len(self.classes_)))
         
-        counter = 0
-        
-        for current_rbf, one_h in zip(rbf_x, one_hot):
-            #forwardpass
+        for i, (current_rbf, one_h) in enumerate(zip(rbf_x, one_hot)):
+            # forwardpass
             result_network_input =  current_rbf @ self.w 
             result_activation_level = self.get_activation_function(result_network_input)
-            result = result_activation_level
-
-            
-            #backwardpass
-            current_rbf = current_rbf.reshape((1,self.k))
+    
+            # backwardpass
+            current_rbf = current_rbf.reshape((1,self.k*len(self.classes_)**int(self.supervised_centroid_calculation)))
             weight_update = self.learning_rate*self.get_delta(self.get_activation_derivate_function(result_network_input), one_h, result_activation_level)* current_rbf.T
+            avg_weight_update += weight_update
+          
+            if ((i % self.batch_size)+1) == self.batch_size:
+                self.w += avg_weight_update
+                avg_weight_update = np.zeros((self.k*len(self.classes_)**int(self.supervised_centroid_calculation),len(self.classes_)))
+            self.learning_rate = self.learning_rate / (1+ self.decay_factor)
             
-            self.w += weight_update
-            
-            counter += 1
-            if(counter == 5000):
-                self.learning_rate = 0.5
-                
-            if counter == 20000:
-                self.learning_rate = 0.1
-            if counter == 30000:
-                self.learning_rate = 0.01
+    def __calculate_centroids(self, X, y):
+        if self.supervised_centroid_calculation:
+            self.centroids_, self.inertias_ = self.__calculate_kmean_for_each_label(X, y) # sqrt(intertia) = standard_deviation
+        else:
+            self.centroids_, self.inertias_ = self.__calculate_kmean_for_number_of_labels(X, self.k)
+    
+    def __get_rbf(self, x, c, s, rbf_kernel):
+        rbf_kernel.set_params(length_scale= s)
+        return rbf_kernel(np.array([c]), x)
+    
+    def __get_rbf_as_list(self, X, centroids, std_list):
+        rbf_kernel = RBF()
+        rbf_list = []
+        for c, l in zip(centroids, std_list):
+            rbf_list.append(self.__get_rbf(X, c, l, rbf_kernel)[0])
+        rbf_list = np.array(rbf_list)
+        rbf_list = rbf_list.T
+        return rbf_list
+    
+    def __convert_to_one_hot(self, x, num_of_classes):
+        arr = np.zeros((len(x), num_of_classes))
+        for i in range(len(x)):
+            c = int(x[i])
+            arr[i][c] = 1
+        return arr
+    
+    def get_identity(self, x):
+        return x
+    
+    def get_identity_derivate(self,x):
+        return np.ones(x.size)
+    
+    def get_sigmoid(self, x):
+        return 1/(1+np.exp(-x))
+
+    def get_sigmoid_derivate(self, x):
+        return self.get_sigmoid(x)*(1-self.get_sigmoid(x))
+    
+    def get_softmax(self, x):
+        return np.exp(x)/(np.sum(np.exp(x)))
+    
+    def get_softmax_derivate(self, x):
+        return self.get_softmax(x)*(1- self.get_softmax(x))
+    
+    def get_activation_function(self, x):
+        function_dict = {
+            "identity":self.get_identity,
+            "sigmoid": self.get_sigmoid,
+            "softmax":self.get_softmax
+            }
+        return function_dict[self.activation_function](x)
+        
+    
+    def get_activation_derivate_function(self, x):
+        function_dict = {
+            "identity":self.get_identity_derivate,
+            "sigmoid": self.get_sigmoid_derivate,
+            "softmax":self.get_softmax_derivate
+            }
+        return function_dict[self.activation_function](x)
+        
+    def get_delta(self, netInput, activationValueShould, activationValueIs):
+        t =  netInput * (activationValueShould - activationValueIs)
+        return t
+    
         
