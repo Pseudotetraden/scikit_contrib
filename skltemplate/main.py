@@ -8,6 +8,8 @@ def normalize(x):
 def convert_one_hot_to_number(one_hot):
     return np.array([np.where(r==1)[0][0] for r in one_hot])
 
+
+
 x_train, y_train, x_test, y_test = mnist.load_mnist()
 
 x_train = x_train[0:6000]
@@ -21,7 +23,11 @@ y_test = y_test[0:1000]
 y_train = convert_one_hot_to_number(y_train)
 y_test = convert_one_hot_to_number(y_test)
 
+	
+from matplotlib import pyplot as plt
+plt.imshow(x_train[0].reshape(28,28))
 
+"""
 from rbfn_without_keras import RadialBasisFunctionNetwork as RBF
 
 rbf = RBF(k=11, pseudoinverse=False, std_from_clusters=True, supervised_centroid_calculation=False, batch_size=20)
@@ -42,9 +48,16 @@ print("end")
 from rbfn_with_keras import RadialBasisFunctionNetwork as RBF
 
 
-rbf = RBF()
+rbf = RBF(epochs=3, batch_size=32)
 a = rbf.fit(x_train, y_train)
+pred = rbf.predict(x_test)
+
+diff = pred - y_test
+
+print('Accuracy: ', len(np.where(diff == 0)[0]) / len(diff))
+
+
 
 print("end")
 
-"""
+# Expand dimension for substraction

@@ -1,59 +1,48 @@
-from sklearn.cluster import KMeans
-from skltemplate.mnist import mnist
-from sklearn.utils import shuffle
+
+import tensorflow as tf
 import numpy as np
-import matplotlib.pyplot as plt
-from sklearn.metrics import euclidean_distances
-from sklearn.metrics.pairwise import paired_distances
-from sklearn.gaussian_process.kernels import RBF
-from keras.models import Sequential
-from keras.layers import  Dense
-from keras.wrappers.scikit_learn import KerasClassifier
+from test_finished_som import SOM_Layer
 
 
-from skltemplate.mnist import mnist
-import numpy as np
+a= tf.Variable([[2., 2., 3.],[3., 3.,4.]])
+b = tf.Variable([[1.,2.,3.],[5.,5., 5.],[4.,3.,6.], [2.,3.,4.]])
 
-"""
-def normalize(x):
-    norm1 = x/np.amax(x)
-    return norm1
+a_exp = tf.expand_dims(a,1)
+b_exp = tf.expand_dims(b, 0)
+print(a_exp)
+res = tf.subtract(a_exp, b_exp)
+print(res)
 
-def convert_one_hot_to_number(one_hot):
-    return np.array([np.where(r==1)[0][0] for r in one_hot])
+learning_rate_op = tf.constant([[1., 0.5, 0.5, 0],[0, 0.5, 0.5, 1.]])
 
-x_train, y_train, x_test, y_test = mnist.load_mnist()
+learning_rate_op2 = tf.expand_dims(learning_rate_op, 2)
 
-x_train = x_train[0:60000]
-y_train = y_train[0:60000]
-x_test = x_test[0:10000]
-y_test = y_test[0:10000]
+res2 = tf.multiply(res, learning_rate_op2)
+print(res2)
+res3 = tf.reduce_sum(res2,axis=0)
 
-#x_train = normalize(x_train)
-#x_test = normalize(x_test)
-
-y_train = convert_one_hot_to_number(y_train)
-y_test = convert_one_hot_to_number(y_test)
+print(res3)
 
 
+somlayer = SOM_Layer(2,2,3,5,0.9,0.5,1.4)
+somlayer.feedforward([[1.,2.,3.],[2.,3.,4.]])
 
-def c_model():
-    model = Sequential()
-    model.add(Dense(784, activation="relu"))
-    model.add(Dense(16, activation="relu"))
-    model.add(Dense(10, activation="softmax"))
-    model.compile(loss="categorical_crossentropy", optimizer="adam", metrics=["accuracy"])
-    return model
+def neuron_locations(m, n):
+    #""
+    #Yields one by one the 2-D locations of the individual neurons in the SOM.
+    #"
+    # Nested iterations over both dimensions to generate all 2-D locations in the map
+    for i in range(m):
+        for j in range(n):
+            yield np.array([i, j])
+                
+location_vects = tf.constant(np.array(list(neuron_locations(2, 2))))
 
-model = KerasClassifier(build_fn=c_model, epochs=50, batch_size=32)
+print(location_vects)
 
-model.fit(x_train, y_train)
-    
-print("end")
 
-"""
-batch_size=2
+x = tf.constant([[1,1,1],[1,1,1]])
+y = tf.expand_dims(tf.expand_dims(x, 0), 0)
 
-for i in range(100):
-    if ((i % batch_size)+1) == batch_size:
-        print(i)
+
+print(y)

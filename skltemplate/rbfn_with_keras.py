@@ -10,19 +10,19 @@ from sklearn.base import BaseEstimator, ClassifierMixin
 
 def create_rbf_model(number_of_classes=10):
     model = Sequential()
+    model.add(Dense(784, activation="relu"))
     model.add(RBFLayer(number_of_classes, 0.5))
     model.add(Dense(number_of_classes, activation="softmax"))
     model.compile(loss="categorical_crossentropy", optimizer="adam", metrics=["accuracy"])
     return model
 
 class RadialBasisFunctionNetwork(KerasClassifier): #, ClassifierMixin, BaseEstimator):
-    def __init__(self,  number_of_classes=10, learning_rate=0.2, 
-                 batch_size=20, build_fn=create_rbf_model, **kwargs):
-        #super(RadialBasisFunctionNetwork, self).__init__(**kwargs)
-        self.build_fn = build_fn
-        self.number_of_classes = number_of_classes
-        self.learning_rate = learning_rate
-        self.batch_size = batch_size
+    def __init__(self, build_fn=None, **kwargs):
+        self.build_fn = create_rbf_model
+        #self.number_of_classes = number_of_classes
+        #self.learning_rate = learning_rate
+        #self.batch_size = batch_size
+        super(RadialBasisFunctionNetwork, self).__init__(build_fn=create_rbf_model, **kwargs)
 
 
 
