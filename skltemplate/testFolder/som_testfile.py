@@ -5,37 +5,34 @@ import tensorflow as tf
 from somlayer import SOMLayer
 from tensorflow.keras.layers import Dense,Softmax
 from tensorflow.keras.initializers import RandomUniform, Initializer
+import matplotlib.pyplot as plt
+#tf.compat.v1.enable_eager_execution()
 
-#tf.compat.v1.disable_eager_execution()
-"""
-class InitTest(Initializer):
-        
-    def __call__(self, shape, dtype=None):
-        return [[3.,4.,5.],[60.,60.,60.],[3.,3.,4.],[2.,2.,3.]]
-    
 
-somlayer = SOMLayer(2,2, 3, 0.9,initializer=InitTest(), dynamic=True)
 
-#somlayer.build(tf.constant([4,3]))
-#x = tf.constant([[1.,2.,3.], [2.,3.,4.], [3.,4.,5.], [4.,5.,6.]])
+def plotMap(n, m, som_map):
+    som_map = som_map.numpy()
+    rows = n
+    cols = m
+    axes=[]
+    fig=plt.figure()
+    for i in range(n):
+       for k in range(m):
+           index = i*n+k
+           image = som_map[index].reshape(28,28)
+           axes.append( fig.add_subplot(rows, cols, index+1) )
+           #subplot_title=("Subplot"+str(index))
+           #axes[-1].set_title(subplot_title)
+           axes[-1].axis('off')
+           plt.imshow(image)
+    fig.tight_layout()
+    plt.axis('off')
+    plt.show()
 
-somlayer.build(tf.constant([3]))
-x = tf.constant([[1.,2.,3.],[2.,3.,4.]])
-
-somlayer.feedforward(x)
-somlayer.backprop(1,0)
-
-somlayer.feedforward(x)
-somlayer.backprop(1,0)
-
-somlayer.feedforward(x)
-somlayer.backprop(1,0)
-
-"""
 def normalize(x):
     norm1 = x/np.amax(x)
     return norm1
-
+# 
 def convert_one_hot_to_number(one_hot):
     return np.array([np.where(r==1)[0][0] for r in one_hot])
 
@@ -60,23 +57,7 @@ def load_data():
     return X, y
 
 
-import matplotlib.pyplot as plt
 
-def show(image, label):
-  print("\nBegin show MNIST image \n")
-
-  image = image.reshape(28,28)
-  for row in range(0,28):
-    for col in range(0,28):
-      print("%02X " % int(image[row][col]), end="")
-    print("") 
-
-  print("\ndigit = ", label)
-
-  plt.imshow(image, cmap=plt.get_cmap('gray_r'))
-  plt.show()  
-
-  print("\nEnd \n")# -*- coding: utf-8 -*-
 
 if __name__ == "__main__":
 
@@ -84,26 +65,23 @@ if __name__ == "__main__":
 
     model = Sequential()
     #self, m,n, input_vector_size, learning_rate,num_epoch, initializer=RandomUniform(0.0, 1.0),radius_factor=1.1, gaussian_std = 0.08, **kwargs
-    somlayer = SOMLayer(8, 8, 784, 0.9, 5, dynamic=True)
+    somlayer = SOMLayer(8, 8, 784, 0.9, 5,x_train.shape[0], dynamic=True)
     model.add(somlayer)
 
     model.compile(loss='mean_squared_error', run_eagerly=True, 
                   optimizer="adam", metrics=["accuracy"])
-    #model.run_eagerly = True
+    #model.run_eagerly = False
 
-    model.fit(x_train, y_train,
-              batch_size=50,
-              epochs=5,
+    model.fit(x_train, np.full((x_train.shape[0],1), 1.),
+              batch_size=10,
+              epochs=1,
               verbose=1)
     
-    for weight in somlayer.get_map():
-        show(weight, "x")
-
+    plotMap(8,8, somlayer.get_map())
+    
     #y_pred = model.predict(x_test)
     
     
-
-
 
 """
 tf.executing_eagerly()

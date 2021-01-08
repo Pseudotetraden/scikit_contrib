@@ -2,9 +2,9 @@ import pytest
 
 from sklearn.utils.estimator_checks import check_estimator
 
-from scikit_contrib import TemplateEstimator
-from scikit_contrib import TemplateClassifier
-from scikit_contrib import TemplateTransformer
+from skltemplate._template import TemplateEstimator
+from skltemplate._template import TemplateTransformer
+from skltemplate.rbfn_without_keras import RadialBasisFunctionNetwork as TemplateClassifier
 
 
 @pytest.mark.parametrize(

@@ -5,10 +5,9 @@ from sklearn.datasets import load_iris
 from sklearn.utils.testing import assert_array_equal
 from sklearn.utils.testing import assert_allclose
 
-from scikit_contrib import TemplateEstimator
-from scikit_contrib import TemplateTransformer
-from scikit_contrib import TemplateClassifier
-
+from skltemplate._template import TemplateEstimator
+from skltemplate._template import TemplateTransformer
+from skltemplate.rbfn_without_keras import RadialBasisFunctionNetwork as TemplateClassifier
 
 @pytest.fixture
 def data():

@@ -50,7 +50,7 @@ class InitCentersKMeans(Initializer):
         return km.cluster_centers_
     
     def get_inertia(self, *args, **kwargs):
-        return [self.inertia/self.X.shape[0]]
+        return [math.sqrt(self.inertia/self.X.shape[0])]
     
 
 class RBFLayer(Layer):

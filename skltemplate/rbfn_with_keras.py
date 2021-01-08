@@ -1,50 +1,44 @@
-from keras.layers import Dense
+from keras.layers import Dense, LayerNormalization
 from keras.models import Sequential
 from keras.wrappers.scikit_learn import KerasClassifier
-from keras.layers import Layer
-from keras import backend as K
-from sklearn.base import BaseEstimator, ClassifierMixin
+from layer.rbfn import RBFLayer, InitCentersKMeans
+from sklearn.utils.multiclass import unique_labels
 
 
-
-
-def create_rbf_model(number_of_classes=10):
+def create_rbf_model(x_train, number_of_classes, number_rbf_kernels):
+    print(number_rbf_kernels)
     model = Sequential()
-    model.add(Dense(784, activation="relu"))
-    model.add(RBFLayer(number_of_classes, 0.5))
-    model.add(Dense(number_of_classes, activation="softmax"))
-    model.compile(loss="categorical_crossentropy", optimizer="adam", metrics=["accuracy"])
+    #model.add(LayerNormalization())
+    rbflayer = RBFLayer(number_rbf_kernels,
+                        initializer=InitCentersKMeans(x_train, n_clusters=number_rbf_kernels), 
+                        input_shape=(x_train.shape[1],),
+                       # dynamic=True
+                        )
+    model.add(rbflayer)
+    model.add(Dense(number_of_classes, activation="softmax")) # number_of_classes softmax
+    #print(f"number of classes {number_of_classes}")
+    model.compile(loss="sparse_categorical_crossentropy", optimizer="adam", metrics=["accuracy"]) #mean_squared_error
     return model
 
+
 class RadialBasisFunctionNetwork(KerasClassifier): #, ClassifierMixin, BaseEstimator):
-    def __init__(self, build_fn=None, **kwargs):
-        self.build_fn = create_rbf_model
-        #self.number_of_classes = number_of_classes
+    def __init__(self, batch_size, number_rbf_kernels=20, build_fn=None, **kwargs):
+        #self.set_params(number_rbf_kernels=number_rbf_kernels, batch_size=batch_size)
+        self.number_rbf_kernels = number_rbf_kernels
         #self.learning_rate = learning_rate
-        #self.batch_size = batch_size
+        self.batch_size = batch_size
+        self.build_fn = create_rbf_model
         super(RadialBasisFunctionNetwork, self).__init__(build_fn=create_rbf_model, **kwargs)
+        
+    def fit(self, x, y, **kwargs):
+        unique_classes = unique_labels(y) # calculated value of y
+        number_of_classes = len(unique_classes)
+        self.set_params(x_train=x, number_of_classes=number_of_classes, number_rbf_kernels=self.number_rbf_kernels)
+        super(RadialBasisFunctionNetwork, self).fit(x, y, **kwargs)
+        
+        
 
 
 
-class RBFLayer(Layer):
-    def __init__(self, units, gamma, **kwargs):
-        super(RBFLayer, self).__init__(**kwargs)
-        self.units = units
-        self.gamma = K.cast_to_floatx(gamma)
-
-    def build(self, input_shape):
-        self.mu = self.add_weight(name='mu',
-                                  shape=(int(input_shape[1]), self.units),
-                                  initializer='uniform',
-                                  trainable=True)
-        super(RBFLayer, self).build(input_shape)
-
-    def call(self, inputs):
-        diff = K.expand_dims(inputs) - self.mu
-        l2 = K.sum(K.pow(diff,2), axis=1)
-        res = K.exp(-1 * self.gamma * l2)
-        return res
-
-    def compute_output_shape(self, input_shape):
-        return (input_shape[0], self.units)
+    
     

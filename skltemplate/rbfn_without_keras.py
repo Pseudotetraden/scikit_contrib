@@ -43,7 +43,7 @@ class RadialBasisFunctionNetwork(ClassifierMixin, BaseEstimator):
     """
     def __init__(self, std_from_cluster=True, pseudoinverse=False, k=10, 
                  learning_rate = 1.0, decay_factor=0.0001, activation_function="softmax",
-                 supervised_centroid_calculation=False, shuffle_data=False, std_from_clusters=False,
+                 supervised_centroid_calculation=False, shuffle=False, std_from_clusters=False,
                  batch_size=1):
         self.std_from_cluster = std_from_cluster
         self.pseudoinverse = pseudoinverse
@@ -52,13 +52,13 @@ class RadialBasisFunctionNetwork(ClassifierMixin, BaseEstimator):
         self.decay_factor = decay_factor
         self.activation_function = activation_function
         self.supervised_centroid_calculation = supervised_centroid_calculation
-        self.shuffle_data = shuffle_data
+        self.shuffle = shuffle
         self.std_from_clusters = std_from_clusters
         self.batch_size = batch_size
 
-    def fit(self, X, y, tX, ty):
-        self.tX = tX
-        self.ty= ty
+    def fit(self, X, y):
+        #self.tX = tX
+        #self.ty= ty
         """A reference implementation of a fitting function for a classifier.
 
         Parameters
@@ -75,6 +75,7 @@ class RadialBasisFunctionNetwork(ClassifierMixin, BaseEstimator):
         """
         # Check that X and y have correct shape
         X, y = check_X_y(X, y)
+        
         # Store the classes seen during fit
         self.classes_ = unique_labels(y)
         
@@ -82,7 +83,7 @@ class RadialBasisFunctionNetwork(ClassifierMixin, BaseEstimator):
         self.__calculate_centroids(X, y)
         
         # Shuffle data
-        if self.shuffle_data:
+        if self.shuffle:
             X, y = shuffle(X, y)
         
         #calculate std_deviation
@@ -116,6 +117,8 @@ class RadialBasisFunctionNetwork(ClassifierMixin, BaseEstimator):
             The label for each sample is the label of the closest sample
             seen during fit.
         """
+        print(self.w)
+        
         # Check is fit had been called
         check_is_fitted(self, ['X_', 'y_'])
 
