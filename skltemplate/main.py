@@ -65,7 +65,7 @@ def test_som_with_keras():
 def test_som_without_keras():
     from som_without_keras import SelfOrganizingMap as SOM
     
-    som = SOM(8,8, 0.9, 10, 10)
+    som = SOM(8,8, 0.9, 1, 10)
     som.fit(x_train, y_train)
     
     sommap = som.get_map()
@@ -84,9 +84,11 @@ def test_som_without_keras():
 def test_rbf_without_keras():
     from rbfn_without_keras import RadialBasisFunctionNetwork as RBF
     
-    rbf = RBF(k=30, batch_size=1)
+    rbf = RBF(number_rbf_kernels=10, batch_size=1, epochs=1)
     
     a = rbf.fit(x_train, y_train)
+    
+    #som_map = rbf.get_centroids(); 
     
     pred = rbf.predict(x_test)
     
@@ -124,10 +126,10 @@ def test_rbf_with_keras():
     print("end")
 
 
-#test_rbf_with_keras()
+test_rbf_with_keras()
 
 test_rbf_without_keras()
 
-#test_som_without_keras()
+test_som_without_keras()
 
-#test_som_with_keras()
+test_som_with_keras()

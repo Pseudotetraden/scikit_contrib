@@ -9,57 +9,87 @@ from sklearn.gaussian_process.kernels import RBF
 import math
 
 
+
 def get_distance(x1, x2):
     sum = 0
     for i in range(len(x1)):
         sum += (x1[i] - x2[i]) ** 2
     return math.sqrt(sum)
 
-def decrease_function(learning_rate, current_iteration, iterations):
-    return learning_rate * math.exp((-1*(float(current_iteration)/iterations)))
-
-
 
 class RadialBasisFunctionNetwork(ClassifierMixin, BaseEstimator):
+    """Radial Basis Function Network.
 
-    """ An example classifier which implements a 1-NN algorithm.
-
-    For more information regarding how to build your own classifier, read more
-    in the :ref:`User Guide <user_guide>`.
+    This Classifier uses the Radial Basis Function as activation Function. The
+    output of the network is a linear combination of radial basis functions 
+    of the inputs and neuron parameters.
 
     Parameters
-    ----------
-    demo_param : str, default='demo'
-        A parameter used for demonstation of how to pass and store paramters.
+    ----------      
+    batch_size : integer, optional, default 5
+        The number input vectors that processed at the same time. Increasing
+        this variable will speed up the calculation, but at the cost of 
+        accuracy and increased RAM usage.
+        
+    number_rbf_kernels : integer, optional, default 20
+        The number specifies how many nodes the hidden layer should have. More
+        nodes increases the accuracy of the neuronal network at the cost 
+        calculation time.
+        
+    epochs : integer, optional, default 1
+        The total number of iterations the nn is training.
+        
+    pseudoinverse : boolean, optional, default False
+        Allows you to choose between calculating the weights of the nn using a 
+        pseudoinverse matrix or by using backpropagation.
+        
+    learning_rate : float, optional, default 0.1
+        Determines the step size at each iteration.
+        
+    decay_factor: float, optional, default 0.0001
+         Determines how fast the learning rate decreases.
+         
+    activation_function: string, optional, default softmax
+        Specifies the activation function used in the output nodes.
+        
+    supervised_centroid_calculation : boolean, optional, default False
+        Group the input data by their classes and get a centroid per class.
+        So the number of centroids is set by the number of classes and not by
+        the attribute number_rbf_kernels.
+        
+    shuffle : boolean, optional, default True
+        wether or not the order of the input (values and labels) should be 
+        randomised. They are randomised in unison.
+        
+        
+    Notes
+    -----
+    This implementation works with data represented as dense numpy arrays.
+    
+    The hidden layer is initialized by using kmeans on the whole training set.
 
-    Attributes
+    References
     ----------
-    X_ : ndarray, shape (n_samples, n_features)
-        The input passed during :meth:`fit`.
-    y_ : ndarray, shape (n_samples,)
-        The labels passed during :meth:`fit`.
-    classes_ : ndarray, shape (n_classes,)
-        The classes seen at :meth:`fit`.
+    Zell, Andreas
+        "Simulation neuronaler Netze." 4., unveränd. Nachdr. München [u.a.] : 
+        Oldenbourg, 2003 — ISBN 3-486-24350-0
     """
-    def __init__(self, std_from_cluster=True, pseudoinverse=False, k=10, 
-                 learning_rate = 1.0, decay_factor=0.0001, activation_function="softmax",
-                 supervised_centroid_calculation=False, shuffle=False, std_from_clusters=False,
-                 batch_size=1):
-        self.std_from_cluster = std_from_cluster
+    
+    def __init__(self, batch_size=1, epochs=1, number_rbf_kernels=10, pseudoinverse=False,  
+                 learning_rate = 0.1, decay_factor=0.0001, activation_function="softmax",
+                 supervised_centroid_calculation=False, shuffle=False):
         self.pseudoinverse = pseudoinverse
-        self.k = k # number of kernels
+        self.epochs = epochs
+        self.number_rbf_kernels = number_rbf_kernels # number of kernels
         self.learning_rate = learning_rate
         self.decay_factor = decay_factor
         self.activation_function = activation_function
         self.supervised_centroid_calculation = supervised_centroid_calculation
         self.shuffle = shuffle
-        self.std_from_clusters = std_from_clusters
         self.batch_size = batch_size
 
     def fit(self, X, y):
-        #self.tX = tX
-        #self.ty= ty
-        """A reference implementation of a fitting function for a classifier.
+        """Trains the Radial Basis Function Network.
 
         Parameters
         ----------
@@ -80,31 +110,30 @@ class RadialBasisFunctionNetwork(ClassifierMixin, BaseEstimator):
         self.classes_ = unique_labels(y)
         
         # Sort X and y based on y    inertia = Variance?
-        self.__calculate_centroids(X, y)
+        self._calculate_centroids(X, y)
         
         # Shuffle data
         if self.shuffle:
             X, y = shuffle(X, y)
+
         
-        #calculate std_deviation
-        if not self.std_from_clusters: # Kann eigentlich weg
-            dMax = np.max([get_distance(c1, c2) for c1 in self.centroids_ for c2 in self.centroids_])
-            self.std_list = np.repeat(dMax / np.sqrt(2 * self.k), self.k * len(self.classes_)**int(self.supervised_centroid_calculation))
-        else:
-            self.std_list = np.sqrt(self.inertias_)
+        #dMax = np.max([get_distance(c1, c2) for c1 in self.centroids_ for c2 in self.centroids_])
+        #self.std_list = np.repeat(dMax / np.sqrt(2 * self.number_rbf_kernels), self.number_rbf_kernels * len(self.classes_)**int(self.supervised_centroid_calculation))
+
+        self.std_list = np.sqrt(self.inertias_)
             
-        rbf_x = self.__get_rbf_as_list(X, self.centroids_, self.std_list)
-        
-        self.__train_weight(rbf_x, y)       
+        rbf_x = self._get_rbf_as_list(X, self.centroids_, self.std_list)
+        self._train_weight(rbf_x, y)       
             
         self.X_ = X
         self.y_ = y
         
         # Return the classifier
         return self
+    
 
     def predict(self, X):
-        """ A reference implementation of a prediction for a classifier.
+        """ Calculates predictions for a given input.
 
         Parameters
         ----------
@@ -117,7 +146,7 @@ class RadialBasisFunctionNetwork(ClassifierMixin, BaseEstimator):
             The label for each sample is the label of the closest sample
             seen during fit.
         """
-        print(self.w)
+        test_weight = self.w
         
         # Check is fit had been called
         check_is_fitted(self, ['X_', 'y_'])
@@ -125,7 +154,7 @@ class RadialBasisFunctionNetwork(ClassifierMixin, BaseEstimator):
         # Input validation
         X = check_array(X)
         
-        rbf_test_list = self.__get_rbf_as_list(X, self.centroids_, self.std_list)
+        rbf_test_list = self._get_rbf_as_list(X, self.centroids_, self.std_list)
         
         result_network_input =   rbf_test_list @ self.w
         
@@ -138,13 +167,11 @@ class RadialBasisFunctionNetwork(ClassifierMixin, BaseEstimator):
             
         return y
 
-        #closest = np.argmin(euclidean_distances(X, self.X_), axis=1)
-        #return self.y_[closest]
     
-    def __calculate_kmean_for_each_label(self, X, y):
-        kmeans = KMeans(n_clusters=self.k)
-        centroids = np.zeros(((len(self.classes_)*self.k), X.shape[1]))
-        inertias = np.zeros(len(self.classes_)*self.k)
+    def _calculate_kmean_for_each_label(self, X, y):
+        kmeans = KMeans(n_clusters=self.number_rbf_kernels)
+        centroids = np.zeros(((len(self.classes_)*self.number_rbf_kernels), X.shape[1]))
+        inertias = np.zeros(len(self.classes_)*self.number_rbf_kernels)
         sortOrder = y.argsort()
         X_sorted = X[sortOrder]
         y_sorted = y[sortOrder]
@@ -152,110 +179,113 @@ class RadialBasisFunctionNetwork(ClassifierMixin, BaseEstimator):
             all_occurences = np.where(y_sorted==self.classes_[i])
             x_of_same_label = X_sorted[all_occurences[0][0]:all_occurences[0][-1]]
             kmeans.fit(x_of_same_label)
-            centroids[i*self.k : i*self.k+self.k] = kmeans.cluster_centers_
-            inertias[i*self.k : i*self.k+self.k] = [kmeans.inertia_/len(x_of_same_label)]*self.k
+            centroids[i*self.number_rbf_kernels : i*self.number_rbf_kernels+self.number_rbf_kernels] = kmeans.cluster_centers_
+            inertias[i*self.number_rbf_kernels : i*self.number_rbf_kernels+self.number_rbf_kernels] = [kmeans.inertia_/len(x_of_same_label)]*self.number_rbf_kernels
         return centroids, inertias
     
-    def __calculate_kmean_for_number_of_labels(self, X, number_of_centroids):
+    def _calculate_kmean_for_number_of_labels(self, X, number_of_centroids):
         kmeans = KMeans(n_clusters= number_of_centroids)
         kmeans.fit(X)
         return kmeans.cluster_centers_, np.full(number_of_centroids, kmeans.inertia_/len(X))
         
     
-    def __train_weight(self, rbf_x, y):
+    def _train_weight(self, rbf_x, y):
         if(self.pseudoinverse):
-            self.__calculate_pseudoinverse(rbf_x, y)
+            self._calculate_pseudoinverse(rbf_x, y)
         else:
-            self.__train_with_backpropagation(rbf_x, y)
+            self._train_with_backpropagation(rbf_x, y)
             
-    def __calculate_pseudoinverse(self, rbf_x, y):            
-        self.w = np.linalg.pinv(rbf_x.T @ rbf_x) @ rbf_x.T @ self.__convert_to_one_hot(y, len(self.classes_))
+    def _calculate_pseudoinverse(self, rbf_x, y):            
+        self.w = np.linalg.pinv(rbf_x.T @ rbf_x) @ rbf_x.T @ self._convert_to_one_hot(y, len(self.classes_))
 
-    def __train_with_backpropagation(self, rbf_x, y):
+    def _train_with_backpropagation(self, rbf_x, y):
                  
-        one_hot = self.__convert_to_one_hot(y, len(self.classes_))
+        one_hot = self._convert_to_one_hot(y, len(self.classes_))
         
-        self.w = np.random.uniform(0,1,(self.k*len(self.classes_)**int(self.supervised_centroid_calculation),len(self.classes_)))
+        self.w = np.random.uniform(0,1,(self.number_rbf_kernels*len(self.classes_)**int(self.supervised_centroid_calculation),len(self.classes_)))
         
-        avg_weight_update = np.zeros((self.k*len(self.classes_)**int(self.supervised_centroid_calculation),len(self.classes_)))
+        avg_weight_update = np.zeros((self.number_rbf_kernels*len(self.classes_)**int(self.supervised_centroid_calculation),len(self.classes_)))
         
-        for i, (current_rbf, one_h) in enumerate(zip(rbf_x, one_hot)):
-            # forwardpass
-            result_network_input =  current_rbf @ self.w 
-            result_activation_level = self.get_activation_function(result_network_input)
-    
-            # backwardpass
-            current_rbf = current_rbf.reshape((1,self.k*len(self.classes_)**int(self.supervised_centroid_calculation)))
-            weight_update = self.learning_rate*self.get_delta(self.get_activation_derivate_function(result_network_input), one_h, result_activation_level)* current_rbf.T
-            avg_weight_update += weight_update
-          
-            if ((i % self.batch_size)+1) == self.batch_size:
-                self.w += avg_weight_update
-                avg_weight_update = np.zeros((self.k*len(self.classes_)**int(self.supervised_centroid_calculation),len(self.classes_)))
-            self.learning_rate = self.learning_rate / (1+ self.decay_factor)
+        for epoch in range(self.epochs):
+            epoch_learning_rate = self.learning_rate
+            for i, (current_rbf, one_h) in enumerate(zip(rbf_x, one_hot)):
+                
+                # forwardpass
+                result_network_input =  current_rbf @ self.w 
+                result_activation_level = self._get_activation_function(result_network_input)
+        
+                # backwardpass
+                current_rbf = current_rbf.reshape((1,self.number_rbf_kernels*len(self.classes_)**int(self.supervised_centroid_calculation)))
+                weight_update = epoch_learning_rate*self._get_delta(self._get_activation_derivate_function(result_network_input), one_h, result_activation_level)* current_rbf.T
+                avg_weight_update += weight_update
+              
+                if ((i % self.batch_size)+1) == self.batch_size:
+                    self.w += avg_weight_update
+                    avg_weight_update = np.zeros((self.number_rbf_kernels*len(self.classes_)**int(self.supervised_centroid_calculation),len(self.classes_)))
+                epoch_learning_rate = epoch_learning_rate / (1+ self.decay_factor)
             
-    def __calculate_centroids(self, X, y):
+    def _calculate_centroids(self, X, y):
         if self.supervised_centroid_calculation:
-            self.centroids_, self.inertias_ = self.__calculate_kmean_for_each_label(X, y) # sqrt(intertia) = standard_deviation
+            self.centroids_, self.inertias_ = self._calculate_kmean_for_each_label(X, y) # sqrt(intertia) = standard_deviation
         else:
-            self.centroids_, self.inertias_ = self.__calculate_kmean_for_number_of_labels(X, self.k)
+            self.centroids_, self.inertias_ = self._calculate_kmean_for_number_of_labels(X, self.number_rbf_kernels)
     
-    def __get_rbf(self, x, c, s, rbf_kernel):
+    def _get_rbf(self, x, c, s, rbf_kernel):
         rbf_kernel.set_params(length_scale= s)
         return rbf_kernel(np.array([c]), x)
     
-    def __get_rbf_as_list(self, X, centroids, std_list):
+    def _get_rbf_as_list(self, X, centroids, std_list):
         rbf_kernel = RBF()
         rbf_list = []
         for c, l in zip(centroids, std_list):
-            rbf_list.append(self.__get_rbf(X, c, l, rbf_kernel)[0])
+            rbf_list.append(self._get_rbf(X, c, l, rbf_kernel)[0])
         rbf_list = np.array(rbf_list)
         rbf_list = rbf_list.T
         return rbf_list
     
-    def __convert_to_one_hot(self, x, num_of_classes):
+    def _convert_to_one_hot(self, x, num_of_classes):
         arr = np.zeros((len(x), num_of_classes))
         for i in range(len(x)):
             c = int(x[i])
             arr[i][c] = 1
         return arr
     
-    def get_identity(self, x):
+    def _get_identity(self, x):
         return x
     
-    def get_identity_derivate(self,x):
+    def _get_identity_derivate(self,x):
         return np.ones(x.size)
     
-    def get_sigmoid(self, x):
+    def _get_sigmoid(self, x):
         return 1/(1+np.exp(-x))
 
-    def get_sigmoid_derivate(self, x):
-        return self.get_sigmoid(x)*(1-self.get_sigmoid(x))
+    def _get_sigmoid_derivate(self, x):
+        return self._get_sigmoid(x)*(1-self._get_sigmoid(x))
     
-    def get_softmax(self, x):
+    def _get_softmax(self, x):
         return np.exp(x)/(np.sum(np.exp(x)))
     
-    def get_softmax_derivate(self, x):
-        return self.get_softmax(x)*(1- self.get_softmax(x))
+    def _get_softmax_derivate(self, x):
+        return self._get_softmax(x)*(1- self._get_softmax(x))
     
-    def get_activation_function(self, x):
+    def _get_activation_function(self, x):
         function_dict = {
-            "identity":self.get_identity,
-            "sigmoid": self.get_sigmoid,
-            "softmax":self.get_softmax
+            "identity":self._get_identity,
+            "sigmoid": self._get_sigmoid,
+            "softmax":self._get_softmax
             }
         return function_dict[self.activation_function](x)
         
     
-    def get_activation_derivate_function(self, x):
+    def _get_activation_derivate_function(self, x):
         function_dict = {
-            "identity":self.get_identity_derivate,
-            "sigmoid": self.get_sigmoid_derivate,
-            "softmax":self.get_softmax_derivate
+            "identity":self._get_identity_derivate,
+            "sigmoid": self._get_sigmoid_derivate,
+            "softmax":self._get_softmax_derivate
             }
         return function_dict[self.activation_function](x)
         
-    def get_delta(self, netInput, activationValueShould, activationValueIs):
+    def _get_delta(self, netInput, activationValueShould, activationValueIs):
         t =  netInput * (activationValueShould - activationValueIs)
         return t
     
